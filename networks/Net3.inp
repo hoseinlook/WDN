@@ -225,7 +225,6 @@ system changes over time.
  321             	163             	265             	1200        	30          	141         	0           	Open  	;
  323             	201             	275             	300         	12          	130         	0           	Open  	;
  325             	269             	271             	1290        	8           	130         	0           	Open  	;
- 329             	61              	123             	45500       	30          	140         	0           	Open  	;
  330             	60              	601             	1           	30          	140         	0           	Closed	;
  333             	601             	61              	1           	30          	140         	0           	Open  	;
 
@@ -236,7 +235,7 @@ system changes over time.
 
 [VALVES]
 ;ID              	Node1           	Node2           	Diameter    	Type	Setting     	MinorLoss
-pvr1                60                 601                 6              prv      1             0
+pvr1                 123                  61                 30              pbv        10            0
 ;pvr2                269                 271                 60              prv     30             0
 ;pvr3                201                 275                 6               prv     55                 0
 

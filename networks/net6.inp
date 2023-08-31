@@ -7289,7 +7289,7 @@ PUMP-3889 JUNCTION-1582 JUNCTION-2532 POWER 15
 
 [VALVES]
 ;ID              	Node1           	Node2           	Diameter    	Type	Setting     	MinorLoss
-VALVE-3890         JUNCTION-3160        JUNCTION-2848       6               prv     30              0
+VALVE-3890         JUNCTION-3160        JUNCTION-2848       6               prv     20              0
 VALVE-3891         JUNCTION-3319        JUNCTION-3281       6               prv     55              0
 
 [TAGS]

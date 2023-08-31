@@ -87,3 +87,24 @@ class WaterNetworkEnv(gym.Env):
 #
 # wntr.graphics.plot_network(wn)
 # print(results.node)
+
+
+
+# import wntr
+#
+# wn = wntr.network.WaterNetworkModel('water-networks/net.inp')
+# wn.options.hydraulic.demand_model = 'DD'
+# wn.options.hydraulic.demand_model = 'PDD'
+# wn.options.time.duration = 10 *3600
+# wntr.graphics.plot_network(wn,title="shit")
+#
+# sim = wntr.sim.EpanetSimulator(wn)
+# results = sim.run_sim() # by default, this runs EPANET 2.2.0
+#
+#
+#
+#
+# prs = results.node["pressure"].loc[1*3600, :]
+# wntr.graphics.plot_network(wn , node_attribute=prs , node_size=30)
+# print(results)
+#

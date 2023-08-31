@@ -1,0 +1,168 @@
+[TITLE]
+ EPANET Example Network 1
+A simple example of modeling chlorine decay. Both bulk and
+wall reactions are included.
+
+[JUNCTIONS]
+;ID              	Elev        	Demand      	Pattern
+1 27.43 0.0
+2 33.53 212.4
+3 28.96 212.4
+4 32.00 640.8
+5 30.48 212.4
+6 31.39 684.0
+7 29.56 640.8
+8 31.39 327.6
+9 32.61 0.0
+10 34.14 0.0
+11 35.05 108.0
+12 36.58 108.0
+13 33.53 0.0
+
+
+[RESERVOIRS]
+;ID              	Head        	Pattern
+RES1 60.96
+RES2 60.96
+
+[TANKS]
+;ID              	Elevation   	InitLevel   	MinLevel    	MaxLevel    	Diameter    	MinVol      	VolCurve        	Overflow
+
+
+[PIPES]
+;ID              	Node1           	Node2           	Length      	Diameter    	Roughness   	MinorLoss   	Status
+1 609.60 762 130
+2 243.80 762 128
+3 1524.00 609 126
+4 1127.76 609 124
+5 1188.72 406 122
+6 640.08 406 120
+7 762.00 254 118
+8 944.88 254 116
+9 1676.40 381 114
+10 883.92 305 112
+11 883.92 305 110
+12 1371.60 381 108
+13 762.00 254 106
+14 822.96 254 104
+15 944.88 305 102
+16 579.00 305 100
+17 487.68 203 98
+18 457.20 152 96
+19 502.92 203 94
+20 883.92 203 92
+21 944.88 305 90
+
+[PUMPS]
+;ID              	Node1           	Node2           	Parameters
+
+[VALVES]
+;ID              	Node1           	Node2           	Diameter    	Type	Setting     	MinorLoss
+ 1               	10              	11              	12          	PRV 	50          	0           	;
+
+[TAGS]
+
+[DEMANDS]
+;Junction        	Demand      	Pattern         	Category
+
+[STATUS]
+;ID              	Status/Setting
+
+[PATTERNS]
+;ID              	Multipliers
+;Demand Pattern
+
+[CURVES]
+;ID              	X-Value     	Y-Value
+;PUMP: PUMP: Pump Curve for Pump 9
+
+[CONTROLS]
+
+
+
+
+[RULES]
+
+
+[ENERGY]
+ Global Efficiency  	75
+ Global Price       	0.0
+ Demand Charge      	0.0
+
+[EMITTERS]
+;Junction        	Coefficient
+
+[QUALITY]
+;Node            	InitQual
+
+
+[SOURCES]
+;Node            	Type        	Quality     	Pattern
+
+[REACTIONS]
+;Type     	Pipe/Tank       	Coefficient
+
+
+[REACTIONS]
+ Order Bulk            	1
+ Order Tank            	1
+ Order Wall            	1
+ Global Bulk           	-.5
+ Global Wall           	-1
+ Limiting Potential    	0.0
+ Roughness Correlation 	0.0
+
+[MIXING]
+;Tank            	Model
+
+[TIMES]
+ Duration           	24:00
+ Hydraulic Timestep 	1:00
+ Quality Timestep   	0:05
+ Pattern Timestep   	2:00
+ Pattern Start      	0:00
+ Report Timestep    	1:00
+ Report Start       	0:00
+ Start ClockTime    	12 am
+ Statistic          	NONE
+
+[REPORT]
+ Status             	Yes
+ Summary            	No
+ Page               	0
+
+[OPTIONS]
+ Units              	GPM
+ Headloss           	H-W
+ Specific Gravity   	1.0
+ Viscosity          	1.0
+ Trials             	40
+ Accuracy           	0.001
+ CHECKFREQ          	2
+ MAXCHECK           	10
+ DAMPLIMIT          	0
+ Unbalanced         	Continue 10
+ Pattern            	1
+ Demand Multiplier  	1.0
+ Emitter Exponent   	0.5
+ Quality            	Chlorine mg/L
+ Diffusivity        	1.0
+ Tolerance          	0.01
+
+[COORDINATES]
+;Node            	X-Coord           	Y-Coord
+
+
+[VERTICES]
+;Link            	X-Coord           	Y-Coord
+
+[LABELS]
+;X-Coord             Y-Coord             Label & Anchor Node
+
+[BACKDROP]
+  DIMENSIONS  	7.000             	6.000             	73.000            	94.000
+ UNITS          	None
+ FILE
+ OFFSET         	0.00            	0.00
+
+[END]
