@@ -41,9 +41,9 @@ wall reactions are included.
 
 [VALVES]
 ;ID              	Node1           	Node2           	Diameter    	Type	Setting     	MinorLoss   
- 2               	11              	21              	12          	PRV 	30          	0           	;
- 3               	12              	22              	12          	PRV 	30          	0           	;
- 4               	13              	23              	12          	PRV 	30          	0           	;
+ prv0              	11              	21              	12          	PRV 	30          	0           	;
+ prv1             	12              	22              	12          	PRV 	30          	0           	;
+ prv2             	13              	23              	12          	PRV 	30          	0           	;
 
 [TAGS]
 
@@ -117,7 +117,7 @@ wall reactions are included.
 ;Tank            	Model
 
 [TIMES]
- Duration           	24:00 
+ Duration           	24:00
  Hydraulic Timestep 	1:00 
  Quality Timestep   	0:05 
  Pattern Timestep   	2:00 
