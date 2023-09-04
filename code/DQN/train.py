@@ -22,10 +22,12 @@ max_steps_per_episode = 72  # 10 days
 env = WaterNetworkEnv(inp_file=F"../../networks/{network_name}.inp", seed=32)
 env.reset(seed=seed)
 
-print(env.action_space.np_random)
 
-num_actions = 2 ** env.num_valves
 
+num_actions = env.action_space.n
+# print(env.actions_index)
+# print(num_actions)
+# exit()
 ALL_EPISODE_REWARDS = []
 
 
@@ -43,7 +45,7 @@ def create_q_model(num_nodes, num_valves):
     layer2 = layers.Dense(128, activation="relu")(layer)
     layer3 = layers.Dense(64, activation="relu")(layer2)
     layer4 = layers.Dense(64, activation="relu")(layer3)
-    action = layers.Dense(2 ** num_valves, activation="linear")(layer4)
+    action = layers.Dense(env.action_space.n, activation="linear")(layer4)
 
     return keras.Model(inputs=inputs, outputs=action)
 
@@ -161,6 +163,7 @@ for i in range(max_iteration):  # Run until solved
 
             # Create a mask so we only calculate loss on the updated Q-values
             masks = tf.one_hot(action_sample, num_actions)
+            print(masks.shape)
             with tf.GradientTape() as tape:
                 # Train the model on the states and updated Q-values
                 q_values = model(state_sample)

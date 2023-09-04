@@ -1,3 +1,4 @@
+import itertools
 from typing import Optional
 
 import gym
@@ -14,8 +15,9 @@ class WaterNetworkEnv(gym.Env):
     MID1_PRESSURE = 50
     MID2_PRESSURE = 67
     MAX_PRESSURE = 70
+    actions_index = dict()
 
-    def __init__(self, inp_file, seed=42):
+    def __init__(self, inp_file, seed=42, bins=3, action_zone=(20, 30, 40, 50)):
         super(WaterNetworkEnv, self).__init__()
         self.seed = seed
 
@@ -25,9 +27,13 @@ class WaterNetworkEnv(gym.Env):
         self.num_valves = self.wn.num_valves
         # Define the action and observation spaces
 
-        self.action_space = spaces.Box(low=0, high=1, shape=(len(list(self.wn.valves())),), dtype=np.int32, seed=seed)
+        self.action_space = spaces.Box(low=action_zone[0] / 10, high=action_zone[-1] / 10, shape=(self.wn.num_valves,), dtype=np.int32, seed=seed)
 
+        self.actions_index = {i: item for i, item in enumerate(list(itertools.product(action_zone, repeat= self.num_valves)))}
+        self.action_space.n = len(self.actions_index.items())
+        self.number_of_actions = bins ** self.num_valves
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(len(self.wn.nodes),), seed=seed)
+
         # Set the initial state
         self.state = np.zeros(len(self.wn.nodes))
         self.time = 0
@@ -50,15 +56,37 @@ class WaterNetworkEnv(gym.Env):
             print(e)
         self.wn.add_control(control_name, c1)
 
-    def step(self, action: int):
-        action = list(map(int, bin(action)[2:].zfill(self.num_valves)))
-        action = np.array(action)
+    def _change_valve_setting(self, setting: int, valve: Valve):
+        name = valve.name
+        control_name = F"valve_{name}_control"
+        act1 = ControlAction(valve, 'setting', setting)
+        cond2 = controls.SimTimeCondition(self.wn, '=', int(self.wn.sim_time))
+        c1 = controls.Control(cond2, act1, name=control_name)
+        # print("ACT ", act1)
+        try:
+            self.wn.remove_control(control_name)
+        except KeyError as e:
+            print("Remove control", act1)
+            print(e)
+        self.wn.add_control(control_name, c1)
+
+    def sample_action(self):
+        return self.action_space.sample()
+
+    def step(self, action_index: int):
+        # action = list(map(int, bin(action)[2:].zfill(self.num_valves)))
+        # action = np.array(action)
         # Apply the action to the water network model
-        print(F"STEP {self.time},Action {action}")
+        print(action_index)
+        actions = self.actions_index.get(action_index)
+        print(F"STEP {self.time},Action {actions}")
         for i, valve in enumerate(self.wn.valves()):
             valve: Valve
-            status = LinkStatus.Active if int(action[i]) == 1 else LinkStatus.Open
-            self._valve_act(status, valve[1])
+            # status = LinkStatus.Active if int(action[i]) == 1 else LinkStatus.Open
+            # self._valve_act(status, valve[1])
+            setting = int(actions[i])
+            print("setting ",setting)
+            self._change_valve_setting(setting, valve[1])
 
         # Simulate the water network model for one step
         self.time = self.wn.sim_time
@@ -125,6 +153,6 @@ class WaterNetworkEnv(gym.Env):
         for node in self.wn.nodes:
             node_pressure = self.wn.get_node(node).pressure
             summation += node_pressure * self._pressure_cost(node_pressure)
-            print("PRESSURE ",node_pressure , node_pressure * self._pressure_cost(node_pressure))
+            print("PRESSURE ", node_pressure, node_pressure * self._pressure_cost(node_pressure))
         reward = summation / self.num_nodes
         return reward
