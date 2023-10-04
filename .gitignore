@@ -3,5 +3,5 @@ venv/
 .ipynb_checkpoints
 models/
 models
-.ipynb_checkpoints/models
+code/DQN/models
 
