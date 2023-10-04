@@ -1,7 +1,10 @@
+import pathlib
+
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from tensorflow import keras
 from keras import layers
+from tensorflow import keras
 
 from code.WNTR_environment import WaterNetworkEnv
 
@@ -21,8 +24,6 @@ max_steps_per_episode = 72  # 10 days
 
 env = WaterNetworkEnv(inp_file=F"../../networks/{network_name}.inp", seed=32)
 env.reset(seed=seed)
-
-
 
 num_actions = env.action_space.n
 # print(env.actions_index)
@@ -87,6 +88,9 @@ update_target_network = 10000
 # Using huber loss for stability
 loss_function = keras.losses.Huber()
 
+steps_rewards = []
+avg_pressures = {}
+node_hour_pressure = {node_num: {} for node_num in range(env.num_nodes)}
 max_running_reward = 0
 for i in range(max_iteration):  # Run until solved
     state = np.array(env.reset())
@@ -125,6 +129,15 @@ for i in range(max_iteration):  # Run until solved
 
         state_next, reward, done, _ = env.step(action)
         state_next = np.array(state_next)
+        if env.time not in avg_pressures:
+            avg_pressures[env.time] = []
+        avg_pressures[env.time].append((i, state_next.mean()))
+
+
+        for node_num, pressure in enumerate(list(state_next)):
+            if env.time not in node_hour_pressure[node_num]:
+                node_hour_pressure[node_num][env.time] = []
+            node_hour_pressure[node_num][env.time].append((i, pressure))
 
         episode_reward += reward
 
@@ -198,6 +211,7 @@ for i in range(max_iteration):  # Run until solved
     # Update running reward to check condition for solving
     episode_reward_history.append(episode_reward)
     ALL_EPISODE_REWARDS.append((episode_reward, frame_count))
+    steps_rewards.append((i, episode_reward))
     if len(episode_reward_history) > 100:
         del episode_reward_history[:1]
     running_reward = np.mean(episode_reward_history)
@@ -210,6 +224,52 @@ for i in range(max_iteration):  # Run until solved
     # if running_reward > 500:  # Condition to consider the task solved
     #     print("Solved at episode {}!".format(episode_count))
     #     break
+
+
+def plot_rewards(steps_rewards):
+    base_path = pathlib.Path(F'./plt_results/rewards/')
+    base_path.mkdir(parents=True)
+    plt.plot([x[0] for x in steps_rewards], [y[1] for y in steps_rewards])
+    plt.ylabel('steps')
+    plt.ylabel('rewards')
+    plt.savefig(F'./plt_results/{network_name}/rewards/{network_name}.jpg')
+    plt.show()
+
+
+def plot_pressure_per_hour(avg_pressures, network_name):
+    base_path = pathlib.Path(F'./plt_results/{network_name}/avg_pressure')
+    base_path.mkdir(parents=True)
+
+    for key, value in avg_pressures.items():
+        # key is time
+        # value (step,avg_pressure)
+        plt.plot([x[0] for x in value], [y[1] for y in value])
+        plt.xlabel('steps')
+        plt.ylabel('avg_pressure')
+        plt.title(F"avg pressure at {key}")
+        plt.savefig(base_path.joinpath(F"hour={key}.jpg"))
+        plt.clf()
+
+
+def plot_pressure_per_node(node_hour_pressure, network_name):
+    for node, hour_pressure in node_hour_pressure.items():
+        base_path = pathlib.Path(F'./plt_results/{network_name}/node_hour_pressure/{node}/')
+        base_path.mkdir(parents=True)
+        for hour, value in hour_pressure.items():
+
+            # key is time
+            # value (step,avg_pressure)
+            plt.plot([x[0] for x in value], [y[1] for y in value])
+            plt.xlabel('steps')
+            plt.ylabel('pressure')
+            plt.title(F"node={node} pressure at hour={hour}")
+            plt.savefig(base_path.joinpath(F"hour={hour}.jpg"))
+            plt.clf()
+
+
+plot_rewards(steps_rewards)
+plot_pressure_per_hour(avg_pressures, network_name)
+plot_pressure_per_node(node_hour_pressure ,network_name)
 
 print("MAX REWARD:", max_running_reward, " last_reward:", running_reward)
 model.save(F'./models/{network_name}')

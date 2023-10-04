@@ -1,12 +1,11 @@
 import itertools
-from typing import Optional
+from typing import Optional, Tuple
 
 import gym
-from gym import spaces
-import wntr
 import numpy as np
-from wntr.network import Valve, LinkStatus, ControlAction, controls
-
+import wntr
+from gym import spaces
+from wntr.network import LinkStatus, ControlAction, controls
 from wntr.network import Valve
 
 
@@ -29,7 +28,7 @@ class WaterNetworkEnv(gym.Env):
 
         self.action_space = spaces.Box(low=action_zone[0] / 10, high=action_zone[-1] / 10, shape=(self.wn.num_valves,), dtype=np.int32, seed=seed)
 
-        self.actions_index = {i: item for i, item in enumerate(list(itertools.product(action_zone, repeat= self.num_valves)))}
+        self.actions_index = {i: item for i, item in enumerate(list(itertools.product(action_zone, repeat=self.num_valves)))}
         self.action_space.n = len(self.actions_index.items())
         self.number_of_actions = bins ** self.num_valves
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(len(self.wn.nodes),), seed=seed)
@@ -73,7 +72,7 @@ class WaterNetworkEnv(gym.Env):
     def sample_action(self):
         return self.action_space.sample()
 
-    def step(self, action_index: int):
+    def step(self, action_index: int) :
         # action = list(map(int, bin(action)[2:].zfill(self.num_valves)))
         # action = np.array(action)
         # Apply the action to the water network model
@@ -85,7 +84,7 @@ class WaterNetworkEnv(gym.Env):
             # status = LinkStatus.Active if int(action[i]) == 1 else LinkStatus.Open
             # self._valve_act(status, valve[1])
             setting = int(actions[i])
-            print("setting ",setting)
+            print("setting ", setting)
             self._change_valve_setting(setting, valve[1])
 
         # Simulate the water network model for one step
