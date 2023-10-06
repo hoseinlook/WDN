@@ -9,7 +9,11 @@ from tensorflow import keras
 from code.WNTR_environment import WaterNetworkEnv
 
 max_iteration = 500
-network_name = "net1_withValve"
+network_name = "simple_net"
+# Number of frames to take random action and observe output
+epsilon_random_frames = 10000
+# Number of frames for exploration
+epsilon_greedy_frames = 20000
 # Configuration paramaters for the whole setup
 seed = 42
 gamma = 0.99  # Discount factor for past rewards
@@ -21,8 +25,9 @@ epsilon_interval = (
 )  # Rate at which to reduce chance of random action being taken
 batch_size = 32  # Size of batch taken from replay buffer
 max_steps_per_episode = 72  # 10 days
+action_zone = (10, 20, 30, 40, 50, 60, 70)
 
-env = WaterNetworkEnv(inp_file=F"../../networks/{network_name}.inp", seed=32)
+env = WaterNetworkEnv(inp_file=F"../../networks/{network_name}.inp", seed=32, action_zone=action_zone)
 env.reset(seed=seed)
 
 num_actions = env.action_space.n
@@ -63,6 +68,7 @@ model_target = create_q_model(env.num_nodes, env.num_valves)
 # improves training time
 optimizer = keras.optimizers.legacy.Adam(learning_rate=0.025, clipnorm=1.0)
 
+step_action_history_all = []
 # Experience replay buffers
 action_history = []
 state_history = []
@@ -73,10 +79,7 @@ episode_reward_history = []
 running_reward = 0
 episode_count = 0
 frame_count = 0
-# Number of frames to take random action and observe output
-epsilon_random_frames = 10000
-# Number of frames for exploration
-epsilon_greedy_frames = 20000
+
 # Maximum replay length
 # Note: The Deepmind paper suggests 1000000 however this causes memory issues
 max_memory_length = 100000
@@ -133,7 +136,6 @@ for i in range(max_iteration):  # Run until solved
             avg_pressures[env.time] = []
         avg_pressures[env.time].append((i, state_next.mean()))
 
-
         for node_num, pressure in enumerate(list(state_next)):
             if env.time not in node_hour_pressure[node_num]:
                 node_hour_pressure[node_num][env.time] = []
@@ -143,6 +145,7 @@ for i in range(max_iteration):  # Run until solved
 
         # Save actions and states in replay buffer
         action_history.append(action)
+        step_action_history_all.append((i, action))
         state_history.append(state)
         state_next_history.append(state_next)
         done_history.append(done)
@@ -227,8 +230,8 @@ for i in range(max_iteration):  # Run until solved
 
 
 def plot_rewards(steps_rewards):
-    base_path = pathlib.Path(F'./plt_results/rewards/')
-    base_path.mkdir(parents=True)
+    base_path = pathlib.Path(F'./plt_results/{network_name}/rewards/')
+    base_path.mkdir(parents=True, exist_ok=True)
     plt.plot([x[0] for x in steps_rewards], [y[1] for y in steps_rewards])
     plt.ylabel('steps')
     plt.ylabel('rewards')
@@ -238,7 +241,7 @@ def plot_rewards(steps_rewards):
 
 def plot_pressure_per_hour(avg_pressures, network_name):
     base_path = pathlib.Path(F'./plt_results/{network_name}/avg_pressure')
-    base_path.mkdir(parents=True)
+    base_path.mkdir(parents=True, exist_ok=True)
 
     for key, value in avg_pressures.items():
         # key is time
@@ -254,9 +257,8 @@ def plot_pressure_per_hour(avg_pressures, network_name):
 def plot_pressure_per_node(node_hour_pressure, network_name):
     for node, hour_pressure in node_hour_pressure.items():
         base_path = pathlib.Path(F'./plt_results/{network_name}/node_hour_pressure/{node}/')
-        base_path.mkdir(parents=True)
+        base_path.mkdir(parents=True, exist_ok=True)
         for hour, value in hour_pressure.items():
-
             # key is time
             # value (step,avg_pressure)
             plt.plot([x[0] for x in value], [y[1] for y in value])
@@ -267,9 +269,29 @@ def plot_pressure_per_node(node_hour_pressure, network_name):
             plt.clf()
 
 
+def plot_chosen_action(step_action_history_all, network_name):
+    base_path = pathlib.Path(F'./plt_results/{network_name}/actions')
+    base_path.mkdir(parents=True, exist_ok=True)
+    step_action_history_all = [(item[0], env.actions_index.get(item[1])) for item in step_action_history_all]
+
+    for i in range(len(action_zone)):
+        # key is time
+        # value (step,avg_pressure)
+        keys = [item[0] for item in step_action_history_all]
+        values = [item[1][i] for item in step_action_history_all]
+
+        plt.plot(keys, values, )
+        plt.xlabel('steps')
+        plt.ylabel('actions')
+
+    plt.savefig(base_path.joinpath(F"result.jpg"))
+    plt.clf()
+
+
 plot_rewards(steps_rewards)
 plot_pressure_per_hour(avg_pressures, network_name)
-plot_pressure_per_node(node_hour_pressure ,network_name)
+plot_pressure_per_node(node_hour_pressure, network_name)
+plot_chosen_action(step_action_history_all, network_name)
 
 print("MAX REWARD:", max_running_reward, " last_reward:", running_reward)
 model.save(F'./models/{network_name}')
