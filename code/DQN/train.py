@@ -8,290 +8,303 @@ from tensorflow import keras
 
 from code.WNTR_environment import WaterNetworkEnv
 
-max_iteration = 500
-network_name = "simple_net"
-# Number of frames to take random action and observe output
-epsilon_random_frames = 10000
-# Number of frames for exploration
-epsilon_greedy_frames = 20000
-# Configuration paramaters for the whole setup
-seed = 42
-gamma = 0.99  # Discount factor for past rewards
-epsilon = 1.0  # Epsilon greedy parameter
-epsilon_min = 0.01  # Minimum epsilon greedy parameter
-epsilon_max = 1.0  # Maximum epsilon greedy parameter
-epsilon_interval = (
-        epsilon_max - epsilon_min
-)  # Rate at which to reduce chance of random action being taken
-batch_size = 32  # Size of batch taken from replay buffer
-max_steps_per_episode = 72  # 10 days
-action_zone = (10, 20, 30, 40, 50, 60, 70)
-
-env = WaterNetworkEnv(inp_file=F"../../networks/{network_name}.inp", seed=32, action_zone=action_zone)
-env.reset(seed=seed)
-
-num_actions = env.action_space.n
-# print(env.actions_index)
-# print(num_actions)
-# exit()
-ALL_EPISODE_REWARDS = []
+DEFAULT_ACTION_ZONE = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 130, 140, 150, 160, 170, 180, 190, 200)
 
 
-def create_q_model(num_nodes, num_valves):
-    # Network defined by the Deepmind paper
-    inputs = layers.Input(shape=(num_nodes))
+class DQN_WATERNETOWRK:
+    INDEX_COLORS = {
+        1: "b",
+        2: "r",
+        3: "k",
+        4: "c",
+        5: "m",
+        6: "y",
+        7: "k",
+        8: "w",
+    }
 
-    # Convolutions on the frames on the screen
-    # layer1 = layers.Conv2D(32, 8, strides=4, activation="relu")(inputs)
-    # layer2 = layers.Conv2D(64, 4, strides=2, activation="relu")(layer1)
-    # layer3 = layers.Conv2D(64, 3, strides=1, activation="relu")(layer2)
+    def __init__(self, network_name: str, seed=42, gamma=0.99, epsilon=1.0, epsilon_min=0.01, epsilon_max=1.0, batch_size=32, max_steps_per_episode=72, action_zone=DEFAULT_ACTION_ZONE, model=None, iterations=500):
+        self.env = WaterNetworkEnv(inp_file=F"../../networks/{network_name}.inp", seed=32, action_zone=action_zone)
+        self.max_iteration = iterations
+        self.network_name = network_name
+        # Number of frames to take random action and observe output
+        self.epsilon_random_frames = 10000
+        # Number of frames for exploration
+        self.epsilon_greedy_frames = 20000
+        # Configuration paramaters for the whole setup
+        self.seed = seed
+        self.gamma = gamma  # Discount factor for past rewards
+        self.epsilon = epsilon  # Epsilon greedy parameter
+        self.epsilon_min = epsilon_min  # Minimum epsilon greedy parameter
+        self.epsilon_max = epsilon_max  # Maximum epsilon greedy parameter
+        self.epsilon_interval = (
+                self.epsilon_max - self.epsilon_min
+        )  # Rate at which to reduce chance of random action being taken
+        self.batch_size = batch_size  # Size of batch taken from replay buffer
+        self.max_steps_per_episode = max_steps_per_episode  # 10 days
+        self.action_zone = action_zone
 
-    layer = layers.Flatten()(inputs)
+        self.ALL_EPISODE_REWARDS = []
+        self.step_action_history_all = []
+        # Experience replay buffers
+        self.action_history = []
+        self.state_history = []
+        self.state_next_history = []
+        self.rewards_history = []
+        self.done_history = []
+        self.episode_reward_history = []
+        self.steps_rewards = []
+        self.avg_pressures = {}
+        self.node_hour_pressure = {node_num: {} for node_num in range(self.env.num_nodes)}
+        # The first model makes the predictions for Q-values which are used to
+        # make a action.
 
-    layer2 = layers.Dense(128, activation="relu")(layer)
-    layer3 = layers.Dense(64, activation="relu")(layer2)
-    layer4 = layers.Dense(64, activation="relu")(layer3)
-    action = layers.Dense(env.action_space.n, activation="linear")(layer4)
-
-    return keras.Model(inputs=inputs, outputs=action)
-
-
-# The first model makes the predictions for Q-values which are used to
-# make a action.
-model = create_q_model(env.num_nodes, env.num_valves)
-# Build a target model for the prediction of future rewards.
-# The weights of a target model get updated every 10000 steps thus when the
-# loss between the Q-values is calculated the target Q-value is stable.
-model_target = create_q_model(env.num_nodes, env.num_valves)
-
-# In the Deepmind paper they use RMSProp however then Adam optimizer
-# improves training time
-optimizer = keras.optimizers.legacy.Adam(learning_rate=0.025, clipnorm=1.0)
-
-step_action_history_all = []
-# Experience replay buffers
-action_history = []
-state_history = []
-state_next_history = []
-rewards_history = []
-done_history = []
-episode_reward_history = []
-running_reward = 0
-episode_count = 0
-frame_count = 0
-
-# Maximum replay length
-# Note: The Deepmind paper suggests 1000000 however this causes memory issues
-max_memory_length = 100000
-# Train the model after 4 actions
-update_after_actions = 10
-# How often to update the target network
-update_target_network = 10000
-
-# Using huber loss for stability
-loss_function = keras.losses.Huber()
-
-steps_rewards = []
-avg_pressures = {}
-node_hour_pressure = {node_num: {} for node_num in range(env.num_nodes)}
-max_running_reward = 0
-for i in range(max_iteration):  # Run until solved
-    state = np.array(env.reset())
-    episode_reward = 0
-    print("RESTART EPISODE ***************** frame:", frame_count, "ITERATION: ", i)
-    for timestep in range(1, max_steps_per_episode):
-        # env.render(); Adding this line would show the attempts
-        # of the agent in a pop up window.
-        frame_count += 1
-
-        # Use epsilon-greedy for exploration
-        random_number = np.random.rand(1)[0]
-        if frame_count < epsilon_random_frames or epsilon > random_number:
-            # Take random action
-            print("RANDOM")
-            # action = list(map(int, bin(random.randint(0, num_actions - 1))[2:].zfill(env.num_valves)))
-            # action = np.array(action)
-            action = np.random.choice(num_actions)
-
+        if model is None:
+            self.model = self.create_nn_model(self.env.num_nodes, self.env.num_valves)
+            self.model_target = self.create_nn_model(self.env.num_nodes, self.env.num_valves)
         else:
-            print("GREEDY ACTION")
-            # Predict action Q-values
-            # From environment state
-            state_tensor = tf.convert_to_tensor(state)
-            state_tensor = tf.expand_dims(state_tensor, 0)
-            action_probs = model(state_tensor, training=False)
-            # Take best action
-            action = tf.argmax(action_probs[0]).numpy()
+            self.model_target = model
+        # Build a target model for the prediction of future rewards.
+        # The weights of a target model get updated every 10000 steps thus when the
+        # loss between the Q-values is calculated the target Q-value is stable.
 
-        # Decay probability of taking random action
-        print("epsilon ", epsilon)
-        epsilon -= epsilon_interval / epsilon_greedy_frames
-        epsilon = max(epsilon, epsilon_min)
+    def create_nn_model(self, num_nodes, num_valves):
+        # Network defined by the Deepmind paper
+        inputs = layers.Input(shape=(num_nodes))
 
-        # Apply the sampled action in our environment
+        # Convolutions on the frames on the screen
+        # layer1 = layers.Conv2D(32, 8, strides=4, activation="relu")(inputs)
+        # layer2 = layers.Conv2D(64, 4, strides=2, activation="relu")(layer1)
+        # layer3 = layers.Conv2D(64, 3, strides=1, activation="relu")(layer2)
 
-        state_next, reward, done, _ = env.step(action)
-        state_next = np.array(state_next)
-        if env.time not in avg_pressures:
-            avg_pressures[env.time] = []
-        avg_pressures[env.time].append((i, state_next.mean()))
+        layer = layers.Flatten()(inputs)
 
-        for node_num, pressure in enumerate(list(state_next)):
-            if env.time not in node_hour_pressure[node_num]:
-                node_hour_pressure[node_num][env.time] = []
-            node_hour_pressure[node_num][env.time].append((i, pressure))
+        layer2 = layers.Dense(128, activation="relu")(layer)
+        layer3 = layers.Dense(64, activation="relu")(layer2)
+        layer4 = layers.Dense(64, activation="relu")(layer3)
+        action = layers.Dense(self.env.action_space.n, activation="linear")(layer4)
 
-        episode_reward += reward
+        return keras.Model(inputs=inputs, outputs=action)
 
-        # Save actions and states in replay buffer
-        action_history.append(action)
-        step_action_history_all.append((i, action))
-        state_history.append(state)
-        state_next_history.append(state_next)
-        done_history.append(done)
-        rewards_history.append(reward)
-        state = state_next
+    def train(self, ):
+        running_reward = 0
+        episode_count = 0
+        frame_count = 0
+        # Maximum replay length
+        # Note: The Deepmind paper suggests 1000000 however this causes memory issues
+        max_memory_length = 100000
+        # Train the model after 4 actions
+        update_after_actions = 10
+        # How often to update the target network
+        update_target_network = 10000
 
-        # Update every fourth frame and once batch size is over 32
-        if frame_count % update_after_actions == 0 and len(done_history) > batch_size:
-            # Get indices of samples for replay buffers
-            indices = np.random.choice(range(len(done_history)), size=batch_size)
+        self.env.reset(seed=self.seed)
+        num_actions = self.env.action_space.n
 
-            # Using list comprehension to sample from replay buffer
-            state_sample = np.array([state_history[i] for i in indices])
-            state_next_sample = np.array([state_next_history[i] for i in indices])
-            rewards_sample = [rewards_history[i] for i in indices]
-            action_sample = [action_history[i] for i in indices]
-            done_sample = tf.convert_to_tensor(
-                [float(done_history[i]) for i in indices]
-            )
+        # In the Deepmind paper they use RMSProp however then Adam optimizer
+        # improves training time
+        optimizer = keras.optimizers.legacy.Adam(learning_rate=0.025, clipnorm=1.0)
 
-            # Build the updated Q-values for the sampled future states
-            # Use the target model for stability
-            future_rewards = model_target.predict(state_next_sample)
-            # Q value = reward + discount factor * expected future reward
-            updated_q_values = rewards_sample + gamma * tf.reduce_max(
-                future_rewards, axis=1
-            )
+        # Using huber loss for stability
+        loss_function = keras.losses.Huber()
 
-            # If final frame set the last value to -1
-            updated_q_values = updated_q_values * (1 - done_sample) - done_sample
+        max_running_reward = 0
+        for i in range(self.max_iteration):  # Run until solved
+            state = np.array(self.env.reset())
+            episode_reward = 0
+            print("RESTART EPISODE ***************** frame:", frame_count, "ITERATION: ", i)
+            for timestep in range(1, self.max_steps_per_episode):
+                # env.render(); Adding this line would show the attempts
+                # of the agent in a pop up window.
+                frame_count += 1
 
-            # Create a mask so we only calculate loss on the updated Q-values
-            masks = tf.one_hot(action_sample, num_actions)
-            print(masks.shape)
-            with tf.GradientTape() as tape:
-                # Train the model on the states and updated Q-values
-                q_values = model(state_sample)
+                # Use epsilon-greedy for exploration
+                random_number = np.random.rand(1)[0]
+                if frame_count < self.epsilon_random_frames or self.epsilon > random_number:
+                    # Take random action
+                    print("RANDOM")
+                    # action = list(map(int, bin(random.randint(0, num_actions - 1))[2:].zfill(env.num_valves)))
+                    # action = np.array(action)
+                    action = np.random.choice(num_actions)
 
-                # Apply the masks to the Q-values to get the Q-value for action taken
-                q_action = tf.reduce_sum(tf.multiply(q_values, masks), axis=1)
-                # Calculate loss between new Q-value and old Q-value
-                loss = loss_function(updated_q_values, q_action)
+                else:
+                    print("GREEDY ACTION")
+                    # Predict action Q-values
+                    # From environment state
+                    state_tensor = tf.convert_to_tensor(state)
+                    state_tensor = tf.expand_dims(state_tensor, 0)
+                    action_probs = self.model(state_tensor, training=False)
+                    # Take best action
+                    action = tf.argmax(action_probs[0]).numpy()
 
-            # Backpropagation
-            grads = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(grads, model.trainable_variables))
+                # Decay probability of taking random action
+                print("epsilon ", self.epsilon)
+                self.epsilon -= self.epsilon_interval / self.epsilon_greedy_frames
+                self.epsilon = max(self.epsilon, self.epsilon_min)
 
-        if frame_count % update_target_network == 0:
-            # update the the target network with new weights
-            model_target.set_weights(model.get_weights())
-            # Log details
-            template = "running reward: {:.2f} at episode {}, frame count {}"
-            print(template.format(running_reward, episode_count, frame_count))
+                # Apply the sampled action in our environment
 
-        # Limit the state and reward history
-        if len(rewards_history) > max_memory_length:
-            del rewards_history[:1]
-            del state_history[:1]
-            del state_next_history[:1]
-            del action_history[:1]
-            del done_history[:1]
+                state_next, reward, done, _ = self.env.step(action)
+                state_next = np.array(state_next)
+                if self.env.time not in self.avg_pressures:
+                    self.avg_pressures[self.env.time] = []
+                self.avg_pressures[self.env.time].append((frame_count, state_next.mean()))
 
-        if done:
-            break
+                for node_num, pressure in enumerate(list(state_next)):
+                    if self.env.time not in self.node_hour_pressure[node_num]:
+                        self.node_hour_pressure[node_num][self.env.time] = []
+                    self.node_hour_pressure[node_num][self.env.time].append((i, pressure))
 
-    # Update running reward to check condition for solving
-    episode_reward_history.append(episode_reward)
-    ALL_EPISODE_REWARDS.append((episode_reward, frame_count))
-    steps_rewards.append((i, episode_reward))
-    if len(episode_reward_history) > 100:
-        del episode_reward_history[:1]
-    running_reward = np.mean(episode_reward_history)
+                episode_reward += reward
 
-    episode_count += 1
-    print('***************************************')
-    print("running_reward", running_reward)
-    if max_running_reward < running_reward:
-        max_running_reward = running_reward
-    # if running_reward > 500:  # Condition to consider the task solved
-    #     print("Solved at episode {}!".format(episode_count))
-    #     break
+                # Save actions and states in replay buffer
+                self.action_history.append(action)
+                self.step_action_history_all.append((frame_count, action))
+                self.state_history.append(state)
+                self.state_next_history.append(state_next)
+                self.done_history.append(done)
+                self.rewards_history.append(reward)
+                state = state_next
 
+                # Update every fourth frame and once batch size is over 32
+                if frame_count % update_after_actions == 0 and len(self.done_history) > self.batch_size:
+                    # Get indices of samples for replay buffers
+                    indices = np.random.choice(range(len(self.done_history)), size=self.batch_size)
 
-def plot_rewards(steps_rewards):
-    base_path = pathlib.Path(F'./plt_results/{network_name}/rewards/')
-    base_path.mkdir(parents=True, exist_ok=True)
-    plt.plot([x[0] for x in steps_rewards], [y[1] for y in steps_rewards])
-    plt.ylabel('steps')
-    plt.ylabel('rewards')
-    plt.savefig(F'./plt_results/{network_name}/rewards/{network_name}.jpg')
-    plt.show()
+                    # Using list comprehension to sample from replay buffer
+                    state_sample = np.array([self.state_history[i] for i in indices])
+                    state_next_sample = np.array([self.state_next_history[i] for i in indices])
+                    rewards_sample = [self.rewards_history[i] for i in indices]
+                    action_sample = [self.action_history[i] for i in indices]
+                    done_sample = tf.convert_to_tensor(
+                        [float(self.done_history[i]) for i in indices]
+                    )
 
+                    # Build the updated Q-values for the sampled future states
+                    # Use the target model for stability
+                    future_rewards = self.model_target.predict(state_next_sample)
+                    # Q value = reward + discount factor * expected future reward
+                    updated_q_values = rewards_sample + self.gamma * tf.reduce_max(
+                        future_rewards, axis=1
+                    )
 
-def plot_pressure_per_hour(avg_pressures, network_name):
-    base_path = pathlib.Path(F'./plt_results/{network_name}/avg_pressure')
-    base_path.mkdir(parents=True, exist_ok=True)
+                    # If final frame set the last value to -1
+                    updated_q_values = updated_q_values * (1 - done_sample) - done_sample
 
-    for key, value in avg_pressures.items():
-        # key is time
-        # value (step,avg_pressure)
-        plt.plot([x[0] for x in value], [y[1] for y in value])
-        plt.xlabel('steps')
-        plt.ylabel('avg_pressure')
-        plt.title(F"avg pressure at {key}")
-        plt.savefig(base_path.joinpath(F"hour={key}.jpg"))
-        plt.clf()
+                    # Create a mask so we only calculate loss on the updated Q-values
+                    masks = tf.one_hot(action_sample, num_actions)
+                    print(masks.shape)
+                    with tf.GradientTape() as tape:
+                        # Train the model on the states and updated Q-values
+                        q_values = self.model(state_sample)
 
+                        # Apply the masks to the Q-values to get the Q-value for action taken
+                        q_action = tf.reduce_sum(tf.multiply(q_values, masks), axis=1)
+                        # Calculate loss between new Q-value and old Q-value
+                        loss = loss_function(updated_q_values, q_action)
 
-def plot_pressure_per_node(node_hour_pressure, network_name):
-    for node, hour_pressure in node_hour_pressure.items():
-        base_path = pathlib.Path(F'./plt_results/{network_name}/node_hour_pressure/{node}/')
+                    # Backpropagation
+                    grads = tape.gradient(loss, self.model.trainable_variables)
+                    optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+
+                if frame_count % update_target_network == 0:
+                    # update the the target network with new weights
+                    self.model_target.set_weights(self.model.get_weights())
+                    # Log details
+                    template = "running reward: {:.2f} at episode {}, frame count {}"
+                    print(template.format(running_reward, episode_count, frame_count))
+
+                # Limit the state and reward history
+                if len(self.rewards_history) > max_memory_length:
+                    del self.rewards_history[:1]
+                    del self.state_history[:1]
+                    del self.state_next_history[:1]
+                    del self.action_history[:1]
+                    del self.done_history[:1]
+
+                if done:
+                    break
+
+            # Update running reward to check condition for solving
+            self.episode_reward_history.append(episode_reward)
+            self.ALL_EPISODE_REWARDS.append((episode_reward, frame_count))
+            self.steps_rewards.append((i, episode_reward))
+            if len(self.episode_reward_history) > 100:
+                del self.episode_reward_history[:1]
+            running_reward = np.mean(self.episode_reward_history)
+
+            episode_count += 1
+            print('***************************************')
+            print("running_reward", running_reward)
+            if max_running_reward < running_reward:
+                max_running_reward = running_reward
+            # if running_reward > 500:  # Condition to consider the task solved
+            #     print("Solved at episode {}!".format(episode_count))
+            #     break
+        print("MAX REWARD:", max_running_reward, " last_reward:", running_reward)
+        return self
+
+    def plot_rewards(self):
+        base_path = pathlib.Path(F'./plt_results/{self.network_name}/rewards/')
         base_path.mkdir(parents=True, exist_ok=True)
-        for hour, value in hour_pressure.items():
+        plt.plot([x[0] for x in self.steps_rewards], [y[1] for y in self.steps_rewards])
+        plt.ylabel('steps')
+        plt.ylabel('rewards')
+        plt.savefig(F'./plt_results/{self.network_name}/rewards/{self.network_name}.jpg')
+        plt.show()
+
+    def plot_pressure_per_hour(self, ):
+        base_path = pathlib.Path(F'./plt_results/{self.network_name}/avg_pressure')
+        base_path.mkdir(parents=True, exist_ok=True)
+
+        for key, value in self.avg_pressures.items():
             # key is time
             # value (step,avg_pressure)
             plt.plot([x[0] for x in value], [y[1] for y in value])
             plt.xlabel('steps')
-            plt.ylabel('pressure')
-            plt.title(F"node={node} pressure at hour={hour}")
-            plt.savefig(base_path.joinpath(F"hour={hour}.jpg"))
+            plt.ylabel('avg_pressure')
+            plt.title(F"avg pressure at {key}")
+            plt.savefig(base_path.joinpath(F"hour={key}.jpg"))
             plt.clf()
 
+    def plot_pressure_per_node(self, ):
+        for node, hour_pressure in self.node_hour_pressure.items():
+            base_path = pathlib.Path(F'./plt_results/{self.network_name}/node_hour_pressure/{node}/')
+            base_path.mkdir(parents=True, exist_ok=True)
+            for hour, value in hour_pressure.items():
+                # key is time
+                # value (step,avg_pressure)
+                plt.plot([x[0] for x in value], [y[1] for y in value])
+                plt.xlabel('steps')
+                plt.ylabel('pressure')
+                plt.title(F"node={node} pressure at hour={hour}")
+                plt.savefig(base_path.joinpath(F"hour={hour}.jpg"))
+                plt.clf()
 
-def plot_chosen_action(step_action_history_all, network_name):
-    base_path = pathlib.Path(F'./plt_results/{network_name}/actions')
-    base_path.mkdir(parents=True, exist_ok=True)
-    step_action_history_all = [(item[0], env.actions_index.get(item[1])) for item in step_action_history_all]
+    def plot_chosen_action(self, ):
+        base_path = pathlib.Path(F'./plt_results/{self.network_name}/actions')
+        base_path.mkdir(parents=True, exist_ok=True)
+        step_action_history_all = [(item[0], self.env.actions_index.get(item[1])) for item in self.step_action_history_all]
+        for i in range(self.env.num_valves):
+            # key is time
+            # value (step,avg_pressure)
+            keys = [item[0] for item in step_action_history_all]
+            values = [item[1][i] for item in step_action_history_all]
 
-    for i in range(len(action_zone)):
-        # key is time
-        # value (step,avg_pressure)
-        keys = [item[0] for item in step_action_history_all]
-        values = [item[1][i] for item in step_action_history_all]
+            plt.plot(keys, values, color=self.INDEX_COLORS.get(i))
 
-        plt.plot(keys, values, )
         plt.xlabel('steps')
         plt.ylabel('actions')
+        plt.savefig(base_path.joinpath(F"result.jpg"))
+        plt.clf()
 
-    plt.savefig(base_path.joinpath(F"result.jpg"))
-    plt.clf()
 
+if __name__ == '__main__':
+    network_name = "simple_net2"
+    dqn_water = DQN_WATERNETOWRK(network_name).train()
 
-plot_rewards(steps_rewards)
-plot_pressure_per_hour(avg_pressures, network_name)
-plot_pressure_per_node(node_hour_pressure, network_name)
-plot_chosen_action(step_action_history_all, network_name)
-
-print("MAX REWARD:", max_running_reward, " last_reward:", running_reward)
-model.save(F'./models/{network_name}')
+    dqn_water.model.save(F'./models/{network_name}')
+    dqn_water.plot_rewards()
+    dqn_water.plot_pressure_per_hour()
+    dqn_water.plot_pressure_per_node()
+    dqn_water.plot_chosen_action()
