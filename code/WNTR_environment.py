@@ -1,5 +1,5 @@
 import itertools
-from typing import Optional, Tuple
+from typing import Optional
 
 import gym
 import numpy as np
@@ -16,9 +16,10 @@ class WaterNetworkEnv(gym.Env):
     MAX_PRESSURE = 70
     actions_index = dict()
 
-    def __init__(self, inp_file, seed=42, bins=3, action_zone=(20, 30, 40, 50)):
+    def __init__(self, inp_file, seed=42, bins=3, action_zone=(20, 30, 40, 50), do_log=True):
         super(WaterNetworkEnv, self).__init__()
         self.seed = seed
+        self.do_log = do_log
 
         # Load the water network model from an INP file
         self.wn = wntr.network.WaterNetworkModel(inp_file)
@@ -72,19 +73,19 @@ class WaterNetworkEnv(gym.Env):
     def sample_action(self):
         return self.action_space.sample()
 
-    def step(self, action_index: int) :
+    def step(self, action_index: int):
         # action = list(map(int, bin(action)[2:].zfill(self.num_valves)))
         # action = np.array(action)
         # Apply the action to the water network model
-        print(action_index)
+
         actions = self.actions_index.get(action_index)
-        print(F"STEP {self.time},Action {actions}")
+        if self.do_log:
+            print(F"ACTION_INDEX {action_index} STEP {self.time},Action {actions}")
         for i, valve in enumerate(self.wn.valves()):
             valve: Valve
             # status = LinkStatus.Active if int(action[i]) == 1 else LinkStatus.Open
             # self._valve_act(status, valve[1])
             setting = int(actions[i])
-            print("setting ", setting)
             self._change_valve_setting(setting, valve[1])
 
         # Simulate the water network model for one step
@@ -145,6 +146,10 @@ class WaterNetworkEnv(gym.Env):
         return c
 
     def _calculate_reward(self):
+        reward = self.reward_function_1()
+        return reward
+
+    def reward_function_1(self):
         # Calculate the reward based on the current state and simulation results
         # Modify this method based on your specific reward function
         # TODO fix
@@ -152,6 +157,7 @@ class WaterNetworkEnv(gym.Env):
         for node in self.wn.nodes:
             node_pressure = self.wn.get_node(node).pressure
             summation += node_pressure * self._pressure_cost(node_pressure)
-            print("PRESSURE ", node_pressure, node_pressure * self._pressure_cost(node_pressure))
+            if self.do_log:
+                print("PRESSURE ", node_pressure, node_pressure * self._pressure_cost(node_pressure))
         reward = summation / self.num_nodes
         return reward
