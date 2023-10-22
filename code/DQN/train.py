@@ -7,9 +7,9 @@ import tensorflow as tf
 from keras import layers
 from tensorflow import keras
 
-from code.WNTR_environment import WaterNetworkEnv
+from code.WNTR_environment import WaterNetworkEnv, REWARD_FUNCTION_1, REWARD_FUNCTION_2
 
-DEFAULT_ACTION_ZONE = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 130, 140, 150, 160, 170, 180, 190, 200)
+DEFAULT_ACTION_ZONE = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 130, 140, 150, 160, 170, 180, 190, 200,210,220,230,240)
 
 
 class DQN_WaterNetwork:
@@ -24,10 +24,10 @@ class DQN_WaterNetwork:
         8: "w",
     }
 
-    def __init__(self, network_name: str, action_zone, seed=42, epsilon_greedy_frames=20000, epsilon_random_frames=10000, gamma=0.99, epsilon_min=0.01, epsilon_max=1.0, batch_size=32, max_steps_per_episode=72, model=None, iterations=500, do_log=False):
+    def __init__(self, network_name: str, action_zone, seed=42, epsilon_greedy_frames=20000, epsilon_random_frames=10000, gamma=0.99, epsilon_min=0.01, epsilon_max=1.0, batch_size=32, max_steps_per_episode=72, model=None, iterations=500, do_log=False, random_failure=0, reward_function_type=REWARD_FUNCTION_1):
         self.do_log = do_log
         network_path = Path(__file__).parent.parent.parent.joinpath("networks").joinpath(F"{network_name}.inp")
-        self.env = WaterNetworkEnv(inp_file=network_path, seed=32, action_zone=action_zone, do_log=self.do_log)
+        self.env = WaterNetworkEnv(inp_file=network_path, seed=32, action_zone=action_zone, do_log=self.do_log, node_demand_random_failure=random_failure, reward_function_type=reward_function_type)
         self.max_iteration = iterations
         self.network_name = network_name
         # Number of frames to take random action and observe output
@@ -102,8 +102,8 @@ class DQN_WaterNetwork:
         # Maximum replay length
         # Note: The Deepmind paper suggests 1000000 however this causes memory issues
         max_memory_length = 100000
-        # Train the model after 4 actions
-        update_after_actions = 10
+        # Train the model after 10 actions
+        update_after_actions = 7
         # How often to update the target network
         update_target_network = 10000
 
@@ -121,7 +121,7 @@ class DQN_WaterNetwork:
         for i in range(self.max_iteration):  # Run until solved
             state = np.array(self.env.reset())
             episode_reward = 0
-
+            self.env.perform_random_failure()
             print("RESTART EPISODE ***************** frame:", frame_count, "ITERATION: ", i)
             for timestep in range(1, self.max_steps_per_episode):
                 # env.render(); Adding this line would show the attempts
@@ -235,7 +235,7 @@ class DQN_WaterNetwork:
             self.episode_reward_history.append(episode_reward)
             self.ALL_EPISODE_REWARDS.append((episode_reward, frame_count))
             self.steps_rewards.append((i, episode_reward))
-            if len(self.episode_reward_history) > 100:
+            if len(self.episode_reward_history) > 200:
                 del self.episode_reward_history[:1]
             running_reward = np.mean(self.episode_reward_history)
 
@@ -329,11 +329,11 @@ class DQN_WaterNetwork:
 
 
 if __name__ == '__main__':
-    network_name = "simple_net2"
-    dqn_water = DQN_WaterNetwork(network_name, action_zone=DEFAULT_ACTION_ZONE).train()
+    network_name = "simple_net"
+    dqn_water = DQN_WaterNetwork(network_name, iterations=2000, action_zone=DEFAULT_ACTION_ZONE, do_log=True, random_failure=1,reward_function_type=REWARD_FUNCTION_2).train()
     model_path = Path(__file__).parent.joinpath("models").joinpath(network_name)
-    dqn_water.model.save(model_path)
-    dqn_water.plot_rewards()
-    dqn_water.plot_pressure_per_hour()
-    dqn_water.plot_pressure_per_node()
-    dqn_water.plot_chosen_action()
+    dqn_water.model.save(model_path.__str__() + "_randomness")
+    dqn_water.plot_rewards(True)
+    # dqn_water.plot_pressure_per_hour()
+    # dqn_water.plot_pressure_per_node()
+    dqn_water.plot_chosen_action(True)
