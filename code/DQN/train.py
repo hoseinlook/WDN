@@ -276,7 +276,7 @@ class DQN_WaterNetwork:
         plt.plot([x[0] for x in self.steps_rewards], [y[1] for y in self.steps_rewards])
         plt.ylabel('steps')
         plt.ylabel('rewards')
-        plt.savefig(F'./plt_results/{self.network_name}/rewards/{self.network_name}.jpg')
+        plt.savefig(F'./plt_results/{self.network_name}/rewards/{self.network_name.replace("/","_")}.jpg')
         if show:
             plt.show()
 
