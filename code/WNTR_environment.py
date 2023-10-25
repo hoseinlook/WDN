@@ -121,7 +121,7 @@ class WaterNetworkEnv(gym.Env):
         if len(results.node["pressure"].values) == 0:
             print("EMPTY TIME", self.time)
             return self.state, 0, False, {}
-        self.state = results.node["pressure"].values[-1] / 100
+        self.state = results.node["pressure"].values[-1] * 1.4503773800722 / 100
 
         # Calculate the reward (e.g., based on water quality, energy efficiency, etc.)
         reward = self._calculate_reward()
