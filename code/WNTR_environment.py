@@ -18,6 +18,7 @@ class WaterNetworkEnv(gym.Env):
     MID1_PRESSURE = 50
     MID2_PRESSURE = 67
     MAX_PRESSURE = 70
+    PSI_UNIT = 1.4503773800722
     NEGATIVE_REWARD = -1000
     actions_index = dict()
 
@@ -34,7 +35,7 @@ class WaterNetworkEnv(gym.Env):
 
         self.action_space = spaces.Box(low=action_zone[0] / 10, high=action_zone[-1] / 10, shape=(self.wn.num_valves,), dtype=np.int32, seed=seed)
         self.node_demand_random_failure = node_demand_random_failure
-        self.actions_index = {i: item for i, item in enumerate(list(itertools.product(action_zone, repeat=self.num_valves)))}
+        self.actions_index = {i: item for i, item in enumerate(list(itertools.product( action_zone, repeat=self.num_valves)))}
         self.action_space.n = len(self.actions_index.items())
         self.number_of_actions = bins ** self.num_valves
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(len(self.wn.nodes),), seed=seed)
@@ -61,7 +62,7 @@ class WaterNetworkEnv(gym.Env):
             print(e)
         self.wn.add_control(control_name, c1)
 
-    def _change_valve_setting(self, setting: int, valve: Valve):
+    def _change_valve_setting(self, setting, valve: Valve):
         name = valve.name
         control_name = F"valve_{name}_control"
         act1 = ControlAction(valve, 'setting', setting)
@@ -102,7 +103,7 @@ class WaterNetworkEnv(gym.Env):
 
         actions = self.actions_index.get(action_index)
         if self.do_log:
-            print(F"ACTION_INDEX {action_index} STEP {self.time},Action {actions}")
+            print(F"ACTION_INDEX {action_index} STEP {self.time},Action {[self.PSI_UNIT * action for action in list(actions)]}")
         for i, valve in enumerate(self.wn.valves()):
             valve: Valve
             # status = LinkStatus.Active if int(action[i]) == 1 else LinkStatus.Open
@@ -121,7 +122,7 @@ class WaterNetworkEnv(gym.Env):
         if len(results.node["pressure"].values) == 0:
             print("EMPTY TIME", self.time)
             return self.state, 0, False, {}
-        self.state = results.node["pressure"].values[-1] * 1.4503773800722 / 100
+        self.state = results.node["pressure"].values[-1] * self.PSI_UNIT / 100
 
         # Calculate the reward (e.g., based on water quality, energy efficiency, etc.)
         reward = self._calculate_reward()
@@ -155,7 +156,7 @@ class WaterNetworkEnv(gym.Env):
         c = 0
         # 40< <50
         if self.MIN_PRESSURE <= pressure < self.MID1_PRESSURE:
-            c = 6 - (pressure / 10)
+            c = 6 - (pressure / 20)
         # 50< <65
         elif self.MID1_PRESSURE <= pressure < self.MID2_PRESSURE:
             c = 1
@@ -180,7 +181,7 @@ class WaterNetworkEnv(gym.Env):
         # TODO fix
         summation = 0
         for node in self.wn.nodes:
-            node_pressure = self.wn.get_node(node).pressure
+            node_pressure = self.wn.get_node(node).pressure * self.PSI_UNIT
             summation += node_pressure * self._pressure_cost(node_pressure)
             if self.do_log:
                 print("PRESSURE ", node_pressure, node_pressure * self._pressure_cost(node_pressure))
@@ -193,7 +194,7 @@ class WaterNetworkEnv(gym.Env):
         # TODO fix
         summation = 0
         for node in self.wn.nodes:
-            node_pressure = self.wn.get_node(node).pressure
+            node_pressure = self.wn.get_node(node).pressure * self.PSI_UNIT
             if node_pressure < 0:
                 summation += self.NEGATIVE_REWARD
                 if self.do_log:
