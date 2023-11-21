@@ -43,10 +43,10 @@ class WaterNetworkEnv(gym.Env):
         # Set the initial state
         self.state = np.zeros(len(self.wn.nodes))
         self.time = 0
-        self.wn.options.time.duration = 3600
+        self.wn.options.time.duration = 3600 *24
         self.wn.options.time.hydraulic_timestep = 3600
         # self.wn.options.time.
-        self.sim = wntr.sim.WNTRSimulator(self.wn)
+        self.sim = wntr.sim.EpanetSimulator(self.wn,)
 
     def _valve_act(self, status: LinkStatus, valve: Valve):
         name = valve.name
@@ -210,3 +210,9 @@ class WaterNetworkEnv(gym.Env):
 if __name__ == '__main__':
     env = WaterNetworkEnv(inp_file="../networks/simple_net.inp")
     env.perform_random_failure()
+    env.sim.run_sim()
+    env.sim.run_sim()
+    env.sim.run_sim()
+    env.sim.run_sim()
+    env.sim.run_sim()
+    print(env.state)

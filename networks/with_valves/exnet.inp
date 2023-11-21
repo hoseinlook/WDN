@@ -4378,7 +4378,7 @@ EXNET water distribution network 2004
 [VALVES]
 ;ID              	Node1           	Node2           	Diameter    	Type	Setting     	MinorLoss
  prv             	5555            	120             	400         	PRV 	58.4        	0           	;
- 1919            	402             	403             	1000        	TCV 	116.7       	0           	;
+ 1919            	402             	403             	1000        	PRV 	116.7       	0           	;
 
 [TAGS]
 
