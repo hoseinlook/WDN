@@ -9,7 +9,7 @@ from tensorflow import keras
 
 from code.WNTR_environment import WaterNetworkEnv, REWARD_FUNCTION_1, REWARD_FUNCTION_2
 
-DEFAULT_ACTION_ZONE = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 130, 140, 150, 160, 170, 180, 190, 200,210,220,230,240)
+DEFAULT_ACTION_ZONE = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240)
 
 
 class DQN_WaterNetwork:
@@ -95,17 +95,17 @@ class DQN_WaterNetwork:
         self.model_target = keras.models.load_model(filepath=filepath)
         return self.model
 
-    def train(self, ):
+    def train(self, update_after_actions=7, update_target_network=10000, max_memory_length=100000,verbose=1):
         running_reward = 0
         episode_count = 0
         frame_count = 0
         # Maximum replay length
         # Note: The Deepmind paper suggests 1000000 however this causes memory issues
-        max_memory_length = 100000
+        max_memory_length = max_memory_length
         # Train the model after 10 actions
-        update_after_actions = 7
+        update_after_actions = update_after_actions
         # How often to update the target network
-        update_target_network = 10000
+        update_target_network = update_target_network
 
         self.env.reset(seed=self.seed)
 
@@ -187,7 +187,7 @@ class DQN_WaterNetwork:
 
                     # Build the updated Q-values for the sampled future states
                     # Use the target model for stability
-                    future_rewards = self.model_target.predict(state_next_sample)
+                    future_rewards = self.model_target.predict(state_next_sample, verbose=verbose)
                     # Q value = reward + discount factor * expected future reward
                     updated_q_values = rewards_sample + self.gamma * tf.reduce_max(
                         future_rewards, axis=1
@@ -198,7 +198,7 @@ class DQN_WaterNetwork:
 
                     # Create a mask so we only calculate loss on the updated Q-values
                     masks = tf.one_hot(action_sample, self.num_actions)
-                    print(masks.shape)
+
                     with tf.GradientTape() as tape:
                         # Train the model on the states and updated Q-values
                         q_values = self.model(state_sample)
@@ -276,7 +276,7 @@ class DQN_WaterNetwork:
         plt.plot([x[0] for x in self.steps_rewards], [y[1] for y in self.steps_rewards])
         plt.ylabel('steps')
         plt.ylabel('rewards')
-        plt.savefig(F'./plt_results/{self.network_name}/rewards/{self.network_name.replace("/","_")}.jpg')
+        plt.savefig(F'./plt_results/{self.network_name}/rewards/{self.network_name.replace("/", "_")}.jpg')
         if show:
             plt.show()
 
@@ -330,7 +330,7 @@ class DQN_WaterNetwork:
 
 if __name__ == '__main__':
     network_name = "simple_net"
-    dqn_water = DQN_WaterNetwork(network_name, iterations=2000, action_zone=DEFAULT_ACTION_ZONE, do_log=True, random_failure=1,reward_function_type=REWARD_FUNCTION_2).train()
+    dqn_water = DQN_WaterNetwork(network_name, iterations=2000, action_zone=DEFAULT_ACTION_ZONE, do_log=True, random_failure=1, reward_function_type=REWARD_FUNCTION_2).train()
     model_path = Path(__file__).parent.joinpath("models").joinpath(network_name)
     dqn_water.model.save(model_path.__str__() + "_randomness")
     dqn_water.plot_rewards(True)

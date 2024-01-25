@@ -46,7 +46,7 @@ class WaterNetworkEnv(gym.Env):
         self.wn.options.time.duration = 3600 *24
         self.wn.options.time.hydraulic_timestep = 3600
         # self.wn.options.time.
-        self.sim = wntr.sim.EpanetSimulator(self.wn,)
+        self.sim = wntr.sim.WNTRSimulator(self.wn,)
 
     def _valve_act(self, status: LinkStatus, valve: Valve):
         name = valve.name
